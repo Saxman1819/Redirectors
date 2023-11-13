@@ -21,11 +21,8 @@ class ClientThread(threading.Thread):
 		
 		self.__clientSocket.setblocking(0)
 
-		context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-		context.load_verify_locations(self.__cert)
-		
 		targetHostSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		targetHostSocket = context.wrap_socket(targetHostSocket, server_hostname='Blackhawk')
+		targetHostSocket = context.wrap_socket(targetHostSocket, ca_certs=self.__cert)
 		targetHostSocket.connect((self.__targetHost, self.__targetPort))
 		targetHostSocket.setblocking(0)
 
@@ -52,6 +49,7 @@ class ClientThread(threading.Thread):
 				
 			for inp in inputsReady:
 				if inp == self.__clientSocket:
+					data = b''
 					try:
 						data = self.__clientSocket.recv(4096)
 					except Exception as e:
@@ -63,6 +61,7 @@ class ClientThread(threading.Thread):
 						else:
 							terminate = True
 				elif inp == targetHostSocket:
+					data = b''
 					try:
 						data = targetHostSocket.recv(4096)
 					except Exception as e:
@@ -102,21 +101,21 @@ if __name__ == '__main__':
 	targetPort = int(sys.argv[6])
 	tcert = sys.argv[7]
 
-	context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-	context.load_cert_chain(scert, skey)		
+	context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+	context.load_cert_chain(certfile=scert, keyfile=skey)		
 	serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	serverSocket.bind((localHost, localPort))
 	serverSocket.listen(5)
-	serverSocket = context.wrap_socket(serverSocket, server_side=True)
 
 	print("Waiting for client...")
 	while True:
 		try:
 			clientSocket, address = serverSocket.accept()
+			connstream = context.wrap_socket(clientSocket, server_side=True)
 		except KeyboardInterrupt:
 			print("\nTerminating...")
 			terminateAll = True
 			break
-		ClientThread(clientSocket, targetHost, targetPort, tcert).start()
+		ClientThread(connstream, targetHost, targetPort, tcert).start()
 		
 	serverSocket.close()
